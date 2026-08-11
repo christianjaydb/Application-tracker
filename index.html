@@ -191,14 +191,17 @@ button{cursor:pointer;}
   background:var(--surface);
   border:1px solid var(--line);border-radius:var(--radius);
   padding:16px;display:flex;align-items:center;gap:14px;
-  transition:border-color .15s var(--ease);
+  transition:border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease);
   animation:fadeUp .35s var(--ease) both;
+  cursor:pointer;
 }
 .gauge-card:nth-child(1){animation-delay:.02s;}
 .gauge-card:nth-child(2){animation-delay:.06s;}
 .gauge-card:nth-child(3){animation-delay:.1s;}
 .gauge-card:nth-child(4){animation-delay:.14s;}
-.gauge-card:hover{border-color:var(--line-strong);}
+.gauge-card:hover{border-color:var(--line-strong);transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,24,31,0.07);}
+.gauge-card:active{transform:translateY(0);}
+.gauge-card:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
 .gauge-ring{position:relative;width:58px;height:58px;flex-shrink:0;}
 .gauge-ring svg{transform:rotate(-90deg);width:58px;height:58px;}
 .gauge-ring .track{fill:none;stroke:var(--surface-sunk);stroke-width:6;}
@@ -573,6 +576,7 @@ tbody tr:last-child td{border-bottom:none;}
         </div>
         <select class="filter-select" id="statusFilter" onchange="renderApplications()">
           <option value="all">All statuses</option>
+          <option value="active">Active pipeline</option>
           <option value="Applied">Applied</option>
           <option value="Assessment">Assessment</option>
           <option value="Interview">Interview</option>
@@ -717,11 +721,40 @@ let jobs = [
   {id:7, position:"Systems Administrator Trainee", company:"Anvilcore Networks", location:"Lipa City", salary:26000, status:"Interview", appliedDate:"2026-07-29", interviewDate:"2026-08-10", notes:"Technical interview — review subnetting & Active Directory basics.", file:"resume_cj_sysadmin.pdf"},
   {id:8, position:"Web Developer", company:"Granite & Co.", location:"Remote", salary:33000, status:"Applied", appliedDate:"2026-08-07", interviewDate:"", notes:"", file:""}
 ];
+const STORAGE_KEY = "trajectory_jobs_v1";
+const STORAGE_ID_KEY = "trajectory_nextid_v1";
+
+function loadState(){
+  try{
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved){
+      const parsed = JSON.parse(saved);
+      if(Array.isArray(parsed) && parsed.length>=0){
+        jobs = parsed;
+        const savedNextId = Number(localStorage.getItem(STORAGE_ID_KEY));
+        nextId = savedNextId || (jobs.reduce((m,j)=>Math.max(m,j.id||0),0) + 1);
+      }
+    }
+  }catch(e){
+    console.warn("Could not load saved applications, using defaults.", e);
+  }
+}
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
+    localStorage.setItem(STORAGE_ID_KEY, String(nextId));
+  }catch(e){
+    console.warn("Could not save applications.", e);
+  }
+}
+
 let nextId = 9;
 let editingId = null;
 let selectedFileName = "";
 let calRefDate = new Date();
 let draggedJobId = null;
+
+loadState();
 
 const STATUS_KEY = {Applied:"applied", Assessment:"assessment", Interview:"interview", Offer:"offer", Rejected:"rejected"};
 const STATUS_COLOR_VAR = {Applied:"--st-applied", Assessment:"--st-assessment", Interview:"--st-interview", Offer:"--st-offer", Rejected:"--st-rejected"};
@@ -816,15 +849,15 @@ function renderGauges(){
   const thisWeek = jobs.filter(j=>daysAgo(j.appliedDate)<=7).length;
 
   const data = [
-    {label:"Total Applications", num:total, pct:100, color:"var(--signal)", sub:thisWeek? `+${thisWeek} this week` : "All time", isPercent:false},
-    {label:"Active Pipeline", num:active, pct:activeRate, color:"var(--st-assessment)", sub:activeRate+"% of total", isPercent:false},
-    {label:"Interview Rate", num:interviewRate, pct:interviewRate, color:"var(--st-interview)", sub:interviewed+" reached interview", isPercent:true},
-    {label:"Offer Rate", num:offerRate, pct:offerRate, color:"var(--st-offer)", sub:offers+" offer(s) received", isPercent:true},
+    {label:"Total Applications", num:total, pct:100, color:"var(--signal)", sub:thisWeek? `+${thisWeek} this week` : "All time", isPercent:false, filter:"all"},
+    {label:"Active Pipeline", num:active, pct:activeRate, color:"var(--st-assessment)", sub:activeRate+"% of total", isPercent:false, filter:"active"},
+    {label:"Interview Rate", num:interviewRate, pct:interviewRate, color:"var(--st-interview)", sub:interviewed+" reached interview", isPercent:true, filter:"Interview"},
+    {label:"Offer Rate", num:offerRate, pct:offerRate, color:"var(--st-offer)", sub:offers+" offer(s) received", isPercent:true, filter:"Offer"},
   ];
 
   const r = 24, c = 2*Math.PI*r;
   document.getElementById("gaugeRow").innerHTML = data.map((d,i)=>`
-    <div class="gauge-card">
+    <div class="gauge-card" tabindex="0" role="button" aria-label="View ${d.label}" onclick="goToApplications('${d.filter}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goToApplications('${d.filter}');}">
       <div class="gauge-ring">
         <svg viewBox="0 0 58 58">
           <circle class="track" cx="29" cy="29" r="${r}"></circle>
@@ -847,6 +880,21 @@ function renderGauges(){
       animateNumber(document.getElementById(`gnum-${i}`), d.num, d.isPercent);
     });
   });
+}
+
+/* ============ GAUGE CARD NAVIGATION ============ */
+function goToApplications(filterValue){
+  const navItem = document.querySelector('.nav-item[data-tab="applications"]');
+  document.querySelectorAll(".nav-item").forEach(i=>i.classList.remove("active"));
+  navItem.classList.add("active");
+  document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+  document.getElementById("tab-applications").classList.add("active");
+
+  document.getElementById("searchInput").value = "";
+  document.getElementById("statusFilter").value = filterValue || "all";
+  document.getElementById("sortFilter").value = "recent";
+  renderApplications();
+  window.scrollTo({top:0, behavior:"smooth"});
 }
 
 /* ============ EXPORT STATISTICS ============ */
@@ -954,6 +1002,7 @@ function wireDragAndDrop(){
       const job = jobs.find(j=>j.id===draggedJobId);
       if(job && job.status!==newStatus){
         job.status = newStatus;
+        saveState();
         showToast(`${job.position} moved to ${newStatus==="Offer"?"Job Offer":newStatus}`);
         renderAll();
       }
@@ -969,7 +1018,7 @@ function renderApplications(){
 
   let list = jobs.filter(j=>{
     const matchesQ = !q || j.company.toLowerCase().includes(q) || j.position.toLowerCase().includes(q);
-    const matchesS = statusF==="all" || j.status===statusF;
+    const matchesS = statusF==="all" || (statusF==="active" ? !["Offer","Rejected"].includes(j.status) : j.status===statusF);
     return matchesQ && matchesS;
   });
 
@@ -1129,6 +1178,7 @@ function saveJob(){
   } else {
     jobs.push({id: nextId++, ...data});
   }
+  saveState();
   closeJobModal();
   renderAll();
   showToast(wasEdit ? "Application updated" : "Application added");
@@ -1137,6 +1187,7 @@ function deleteCurrentJob(){
   if(!editingId) return;
   if(!confirm("Delete this application? This cannot be undone.")) return;
   jobs = jobs.filter(j=>j.id!==editingId);
+  saveState();
   closeJobModal();
   renderAll();
   showToast("Application deleted");
