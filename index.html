@@ -782,6 +782,7 @@ let editingId = null;
 let selectedFileName = "";
 let calRefDate = new Date();
 let draggedJobId = null;
+let firstGaugeRender = true;
 
 loadState();
 
@@ -900,15 +901,22 @@ function renderGauges(){
       </div>
     </div>`).join("");
 
-  // animate after paint
-  requestAnimationFrame(()=>{
-    data.forEach((d,i)=>{
-      const ring = document.getElementById(`ring-${i}`);
-      const dash = (d.pct/100)*c;
-      ring.style.strokeDasharray = `${dash} ${c}`;
-      animateNumber(document.getElementById(`gnum-${i}`), d.num, d.isPercent);
+  // animate after paint — on first load, wait for the entry curtain to
+  // finish sweeping away so the count-up/ring-fill is actually visible
+  // instead of playing behind it; later re-renders animate immediately.
+  const delayMs = firstGaugeRender ? 1100 : 0;
+  firstGaugeRender = false;
+  setTimeout(()=>{
+    requestAnimationFrame(()=>{
+      data.forEach((d,i)=>{
+        const ring = document.getElementById(`ring-${i}`);
+        if(!ring) return;
+        const dash = (d.pct/100)*c;
+        ring.style.strokeDasharray = `${dash} ${c}`;
+        animateNumber(document.getElementById(`gnum-${i}`), d.num, d.isPercent);
+      });
     });
-  });
+  }, delayMs);
 }
 
 /* ============ GAUGE CARD NAVIGATION ============ */
