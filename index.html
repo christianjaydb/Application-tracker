@@ -770,12 +770,10 @@ async function loadState(){
 async function saveState(){
   try{
     const result = await window.storage.set(STORAGE_KEY, JSON.stringify({jobs, nextId}), false);
-    if(!result){
-      showToast("Could not save changes — try again.", true);
-    }
+    return !!result;
   }catch(e){
     console.warn("Could not save applications.", e);
-    showToast("Could not save changes — try again.", true);
+    return false;
   }
 }
 
@@ -1038,10 +1036,18 @@ function wireDragAndDrop(){
       const newStatus = col.dataset.status;
       const job = jobs.find(j=>j.id===draggedJobId);
       if(job && job.status!==newStatus){
+        const prevStatus = job.status;
         job.status = newStatus;
-        saveState();
-        showToast(`${job.position} moved to ${newStatus==="Offer"?"Job Offer":newStatus}`);
         renderAll();
+        saveState().then(ok=>{
+          if(ok){
+            showToast(`${job.position} moved to ${newStatus==="Offer"?"Job Offer":newStatus}`);
+          } else {
+            job.status = prevStatus;
+            renderAll();
+            showToast("Could not save the move — try again.", true);
+          }
+        });
       }
     });
   });
@@ -1215,19 +1221,19 @@ async function saveJob(){
   } else {
     jobs.push({id: nextId++, ...data});
   }
-  await saveState();
+  const ok = await saveState();
   closeJobModal();
   renderAll();
-  showToast(wasEdit ? "Application updated" : "Application added");
+  showToast(ok ? (wasEdit ? "Application updated" : "Application added") : "Saved locally, but could not sync — changes may not persist.", !ok);
 }
 async function deleteCurrentJob(){
   if(!editingId) return;
   if(!confirm("Delete this application? This cannot be undone.")) return;
   jobs = jobs.filter(j=>j.id!==editingId);
-  await saveState();
+  const ok = await saveState();
   closeJobModal();
   renderAll();
-  showToast("Application deleted");
+  showToast(ok ? "Application deleted" : "Deleted locally, but could not sync.", !ok);
 }
 document.getElementById("jobOverlay").addEventListener("click", e=>{
   if(e.target.id==="jobOverlay") closeJobModal();
