@@ -752,25 +752,49 @@ let jobs = [
 ];
 const STORAGE_KEY = "trajectory_jobs_v1";
 
+// The artifact storage API (window.storage) only exists when this page is
+// rendered live inside Claude's own artifact panel. If it's missing —
+// e.g. the file was downloaded and opened directly in a browser — fall
+// back to localStorage so the tracker still works and saves within that
+// browser/profile.
+const hasArtifactStorage = (typeof window !== "undefined")
+  && window.storage
+  && typeof window.storage.get === "function"
+  && typeof window.storage.set === "function";
+
 async function loadState(){
   try{
-    const saved = await window.storage.get(STORAGE_KEY, false);
-    if(saved && saved.value){
-      const parsed = JSON.parse(saved.value);
-      if(parsed && Array.isArray(parsed.jobs)){
-        jobs = parsed.jobs;
-        nextId = parsed.nextId || (jobs.reduce((m,j)=>Math.max(m,j.id||0),0) + 1);
+    if(hasArtifactStorage){
+      const saved = await window.storage.get(STORAGE_KEY, false);
+      if(saved && saved.value){
+        applyLoadedState(saved.value);
       }
+    } else {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) applyLoadedState(raw);
     }
   }catch(e){
     // Key doesn't exist yet (first run) or fetch failed — fall back to defaults.
     console.warn("Could not load saved applications, using defaults.", e);
   }
 }
+function applyLoadedState(raw){
+  const parsed = JSON.parse(raw);
+  if(parsed && Array.isArray(parsed.jobs)){
+    jobs = parsed.jobs;
+    nextId = parsed.nextId || (jobs.reduce((m,j)=>Math.max(m,j.id||0),0) + 1);
+  }
+}
 async function saveState(){
+  const payload = JSON.stringify({jobs, nextId});
   try{
-    const result = await window.storage.set(STORAGE_KEY, JSON.stringify({jobs, nextId}), false);
-    return !!result;
+    if(hasArtifactStorage){
+      const result = await window.storage.set(STORAGE_KEY, payload, false);
+      return !!result;
+    } else {
+      localStorage.setItem(STORAGE_KEY, payload);
+      return true;
+    }
   }catch(e){
     console.warn("Could not save applications.", e);
     return false;
