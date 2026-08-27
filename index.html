@@ -751,29 +751,31 @@ let jobs = [
   {id:8, position:"Web Developer", company:"Granite & Co.", location:"Remote", salary:33000, status:"Applied", appliedDate:"2026-08-07", interviewDate:"", notes:"", file:""}
 ];
 const STORAGE_KEY = "trajectory_jobs_v1";
-const STORAGE_ID_KEY = "trajectory_nextid_v1";
 
-function loadState(){
+async function loadState(){
   try{
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if(saved){
-      const parsed = JSON.parse(saved);
-      if(Array.isArray(parsed) && parsed.length>=0){
-        jobs = parsed;
-        const savedNextId = Number(localStorage.getItem(STORAGE_ID_KEY));
-        nextId = savedNextId || (jobs.reduce((m,j)=>Math.max(m,j.id||0),0) + 1);
+    const saved = await window.storage.get(STORAGE_KEY, false);
+    if(saved && saved.value){
+      const parsed = JSON.parse(saved.value);
+      if(parsed && Array.isArray(parsed.jobs)){
+        jobs = parsed.jobs;
+        nextId = parsed.nextId || (jobs.reduce((m,j)=>Math.max(m,j.id||0),0) + 1);
       }
     }
   }catch(e){
+    // Key doesn't exist yet (first run) or fetch failed — fall back to defaults.
     console.warn("Could not load saved applications, using defaults.", e);
   }
 }
-function saveState(){
+async function saveState(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
-    localStorage.setItem(STORAGE_ID_KEY, String(nextId));
+    const result = await window.storage.set(STORAGE_KEY, JSON.stringify({jobs, nextId}), false);
+    if(!result){
+      showToast("Could not save changes — try again.", true);
+    }
   }catch(e){
     console.warn("Could not save applications.", e);
+    showToast("Could not save changes — try again.", true);
   }
 }
 
@@ -783,8 +785,6 @@ let selectedFileName = "";
 let calRefDate = new Date();
 let draggedJobId = null;
 let firstGaugeRender = true;
-
-loadState();
 
 const STATUS_KEY = {Applied:"applied", Assessment:"assessment", Interview:"interview", Offer:"offer", Rejected:"rejected"};
 const STATUS_COLOR_VAR = {Applied:"--st-applied", Assessment:"--st-assessment", Interview:"--st-interview", Offer:"--st-offer", Rejected:"--st-rejected"};
@@ -1190,7 +1190,7 @@ function handleFileSelect(input){
     document.getElementById("fileDrop").classList.add("has-file");
   }
 }
-function saveJob(){
+async function saveJob(){
   const position = document.getElementById("f_position").value.trim();
   const company = document.getElementById("f_company").value.trim();
   if(!position || !company){
@@ -1215,16 +1215,16 @@ function saveJob(){
   } else {
     jobs.push({id: nextId++, ...data});
   }
-  saveState();
+  await saveState();
   closeJobModal();
   renderAll();
   showToast(wasEdit ? "Application updated" : "Application added");
 }
-function deleteCurrentJob(){
+async function deleteCurrentJob(){
   if(!editingId) return;
   if(!confirm("Delete this application? This cannot be undone.")) return;
   jobs = jobs.filter(j=>j.id!==editingId);
-  saveState();
+  await saveState();
   closeJobModal();
   renderAll();
   showToast("Application deleted");
@@ -1244,7 +1244,12 @@ function renderAll(){
   renderApplications();
   if(document.getElementById("tab-calendar").classList.contains("active")) renderCalendar();
 }
-renderAll();
+
+async function init(){
+  await loadState();
+  renderAll();
+}
+init();
 </script>
 </body>
 </html>
