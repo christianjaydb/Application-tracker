@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="is-loading">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -55,6 +55,11 @@ body{
   overflow-x:hidden;
   width:100%;
   position:relative;
+}
+/* While the load curtain is up, block all scrolling on the page */
+html.is-loading, html.is-loading body{
+  overflow:hidden !important;
+  height:100%;
 }
 ::selection{background:var(--signal);color:#fff;}
 h1,h2,h3{font-family:'Poppins',sans-serif;letter-spacing:-0.01em;}
@@ -810,6 +815,21 @@ let firstGaugeRender = true;
 
 const STATUS_KEY = {Applied:"applied", Assessment:"assessment", Interview:"interview", Offer:"offer", Rejected:"rejected"};
 const STATUS_COLOR_VAR = {Applied:"--st-applied", Assessment:"--st-assessment", Interview:"--st-interview", Offer:"--st-offer", Rejected:"--st-rejected"};
+
+/* ============ LOAD CURTAIN / SCROLL LOCK ============ */
+(function(){
+  const html = document.documentElement;
+  const curtain = document.querySelector(".load-curtain");
+  const unlock = () => html.classList.remove("is-loading");
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(!curtain || prefersReducedMotion){
+    unlock();
+  } else {
+    curtain.addEventListener("animationend", unlock, {once:true});
+    // Safety net in case the animationend event doesn't fire for some reason
+    setTimeout(unlock, 1300);
+  }
+})();
 
 /* ============ NAV ============ */
 document.querySelectorAll(".nav-item").forEach(item=>{
