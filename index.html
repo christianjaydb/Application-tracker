@@ -61,6 +61,11 @@ html.is-loading, html.is-loading body{
   overflow:hidden !important;
   height:100%;
 }
+/* While loading, the page underneath must not be clickable/focusable at all */
+html.is-loading .shell{
+  pointer-events:none !important;
+  user-select:none;
+}
 ::selection{background:var(--signal);color:#fff;}
 h1,h2,h3{font-family:'Poppins',sans-serif;letter-spacing:-0.01em;}
 .mono{font-family:'Poppins',sans-serif;font-weight:500;letter-spacing:0.01em;}
@@ -437,6 +442,9 @@ tbody tr:last-child td{border-bottom:none;}
   background:linear-gradient(155deg, #3D6EF0 0%, var(--signal) 55%, #1E45B8 100%);
   display:flex;align-items:center;justify-content:center;
   animation:curtainUp .55s var(--ease) .55s forwards;
+  pointer-events:auto;
+}
+html:not(.is-loading) .load-curtain{
   pointer-events:none;
 }
 .load-curtain svg{width:44px;height:44px;opacity:0;animation:popIn .4s var(--ease) .1s forwards;}
